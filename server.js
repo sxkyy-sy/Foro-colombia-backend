@@ -201,9 +201,9 @@ function startServer(botClient) {
         res.json(categories);
     });
 
-    // CRUD Categorías (Solo Fundador)
+    // CRUD Categorías (STAFF)
     app.post('/api/admin/categories', async (req, res) => {
-        if (!req.user || req.user.role !== 'Fundador') return res.status(403).json({ error: 'Denegado' });
+        if (!req.user || req.user.is_admin !== 1) return res.status(403).json({ error: 'Denegado' });
         const { name, description, icon } = req.body;
         const db = await getDB();
         await db.run('INSERT INTO categories (name, description, icon, order_index) VALUES (?, ?, ?, 99)', [name, description, icon || 'fa-solid fa-folder']);
@@ -211,7 +211,7 @@ function startServer(botClient) {
     });
 
     app.put('/api/admin/categories/:id', async (req, res) => {
-        if (!req.user || req.user.role !== 'Fundador') return res.status(403).json({ error: 'Denegado' });
+        if (!req.user || req.user.is_admin !== 1) return res.status(403).json({ error: 'Denegado' });
         const { name, description, icon } = req.body;
         const db = await getDB();
         await db.run('UPDATE categories SET name=?, description=?, icon=? WHERE id=?', [name, description, icon, req.params.id]);
@@ -219,7 +219,7 @@ function startServer(botClient) {
     });
 
     app.delete('/api/admin/categories/:id', async (req, res) => {
-        if (!req.user || req.user.role !== 'Fundador') return res.status(403).json({ error: 'Denegado' });
+        if (!req.user || req.user.is_admin !== 1) return res.status(403).json({ error: 'Denegado' });
         const db = await getDB();
         await db.run('DELETE FROM categories WHERE id=?', [req.params.id]);
         res.json({ success: true });
