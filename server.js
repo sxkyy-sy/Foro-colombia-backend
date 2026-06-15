@@ -302,29 +302,67 @@ function startServer(botClient) {
         const date = new Date().toLocaleDateString('es-ES');
         const db = await getDB();
 
+        // --- REGLA GTA WORLD: Solo autor, reportado o STAFF pueden comentar ---
+        const report = await db.get('SELECT title, author_id, reported_id, category_id FROM reports WHERE id = ?', [reportId]);
+        if (!report) return res.status(404).json({ error: 'Reporte no encontrado' });
+
+        const cleanReportedId = report.reported_id ? report.reported_id.replace(/[^0-9]/g, '') : null;
+        const isAuthor = req.user.id === report.author_id;
+        const isReported = cleanReportedId && req.user.id === cleanReportedId;
+        const isStaff = req.user.is_admin === 1;
+
+        // Solo aplica esta restricción en la categoría de reportes (id 1)
+        if (report.category_id === 1 && !isAuthor && !isReported && !isStaff) {
+            return res.status(403).json({ error: 'Solo las partes involucradas y el STAFF pueden responder en un reporte.' });
+        }
+
         await db.run(
             'INSERT INTO comments (report_id, author_id, author_name, author_avatar, text, date) VALUES (?, ?, ?, ?, ?, ?)',
             [reportId, req.user.id, req.user.username, req.user.avatar, text, date]
         );
 
         // Notificar a las partes
-        const report = await db.get('SELECT title, author_id, reported_id FROM reports WHERE id = ?', [reportId]);
-        if (report) {
-            const cleanReportedId = report.reported_id ? report.reported_id.replace(/[^0-9]/g, '') : null;
-            const message = `Alguien ha comentado en el hilo **"${report.title}"**. Ingresa para leer la respuesta.`;
-            
-            // Notificar al autor si no fue él
-            if (report.author_id !== req.user.id) {
-                await sendNotification(report.author_id, '💬 Nueva Respuesta', message, '#3498db');
-            }
-            // Notificar al reportado si no fue él
-            if (cleanReportedId && cleanReportedId !== req.user.id) {
-                await sendNotification(cleanReportedId, '💬 Nueva Respuesta', message, '#3498db');
-            }
+        const message = `Alguien ha respondido en el hilo **"${report.title}"**. Ingresa para leer la respuesta.`;
+        if (report.author_id !== req.user.id) {
+            await sendNotification(report.author_id, '💬 Nueva Respuesta en tu Reporte', message, '#3498db');
+        }
+        if (cleanReportedId && cleanReportedId !== req.user.id) {
+            await sendNotification(cleanReportedId, '💬 Nueva Respuesta en tu Reporte', message, '#3498db');
         }
 
         res.json({ success: true });
     });
+
+    // --- NUEVO: Tomar Reporte (Handling Admin - Estilo GTA World) ---
+    app.put('/api/reports/:id/handle', async (req, res) => {
+        if (!req.user || req.user.is_admin !== 1) return res.status(403).json({ error: 'No autorizado' });
+        const db = await getDB();
+        const report = await db.get('SELECT title, author_id, reported_id, handling_admin_id FROM reports WHERE id = ?', [req.params.id]);
+        
+        if (!report) return res.status(404).json({ error: 'Reporte no encontrado' });
+        if (report.handling_admin_id && report.handling_admin_id !== req.user.id) {
+            return res.status(409).json({ error: `Este reporte ya fue tomado por otro miembro del STAFF.` });
+        }
+
+        await db.run(
+            'UPDATE reports SET handling_admin_id = ?, handling_admin_name = ?, handling_admin_avatar = ? WHERE id = ?',
+            [req.user.id, req.user.username, req.user.avatar, req.params.id]
+        );
+
+        // Notificar a las partes que un admin tomó el caso
+        const cleanReportedId = report.reported_id ? report.reported_id.replace(/[^0-9]/g, '') : null;
+        const msg48h = `El STAFF ha tomado tu reporte **"${report.title}"**.\n\n**Admin a cargo:** ${req.user.username}\n\nTienes **48 horas** para presentar tu versión de los hechos si eres el reportado.`;
+        
+        if (report.author_id !== req.user.id) {
+            await sendNotification(report.author_id, '🔍 Admin asignado a tu Reporte', msg48h, '#003580');
+        }
+        if (cleanReportedId && cleanReportedId !== req.user.id) {
+            await sendNotification(cleanReportedId, '⚠️ Admin asignado — Tienes 48h para responder', msg48h, '#FF6B00');
+        }
+
+        res.json({ success: true });
+    });
+
 
     app.put('/api/reports/:id/status', async (req, res) => {
         if (!req.user || req.user.is_admin !== 1) return res.status(401).json({ error: 'No autorizado' });

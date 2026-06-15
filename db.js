@@ -92,6 +92,12 @@ async function setupDB() {
         );
     `);
 
+    // Add new columns for GTA World style handling admin (safe to run multiple times)
+    await pool.query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS handling_admin_id VARCHAR`);
+    await pool.query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS handling_admin_name VARCHAR`);
+    await pool.query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS handling_admin_avatar VARCHAR`);
+    await pool.query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS character_name VARCHAR`);
+
     // Add session table for connect-pg-simple if not exists
     await dbWrapper.exec(`
         CREATE TABLE IF NOT EXISTS "session" (
