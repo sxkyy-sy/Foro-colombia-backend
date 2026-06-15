@@ -13,16 +13,17 @@ function startServer(botClient) {
     const app = express();
     
     // Reusable Notification Function
-    const sendNotification = async (userId, title, description, color = '#FFD700', url = 'http://localhost:5173') => {
+    const sendNotification = async (userId, title, description, color = '#FFD700', url = null) => {
         if (!botClient || !userId) return;
         try {
+            const finalUrl = url || process.env.FRONTEND_URL || 'http://localhost:5173';
             const user = await botClient.users.fetch(userId);
             if (!user) return;
             const embed = new EmbedBuilder()
                 .setTitle(title)
                 .setDescription(description)
                 .setColor(color)
-                .setURL(url)
+                .setURL(finalUrl)
                 .setFooter({ text: 'Colombia Exotic Reports' })
                 .setTimestamp();
             await user.send({ embeds: [embed] });
