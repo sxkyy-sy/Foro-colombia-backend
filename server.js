@@ -334,7 +334,18 @@ function startServer(botClient) {
         if (status === 'accepted' && reportedUsername && botClient) {
             const cleanUsername = reportedUsername.replace('@', '').toLowerCase();
             try {
-                const guild = await botClient.guilds.fetch(process.env.GUILD_ID);
+                const guildId = process.env.GUILD_ID;
+                let guild;
+                if (guildId) {
+                    guild = await botClient.guilds.fetch(guildId);
+                } else {
+                    guild = botClient.guilds.cache.first();
+                }
+                
+                if (!guild) {
+                    throw new Error("El bot no está en ningún servidor. Revisa el GUILD_ID en .env");
+                }
+
                 const members = await guild.members.fetch({ query: cleanUsername, limit: 1 });
                 const member = members.first();
                 if (member) {
