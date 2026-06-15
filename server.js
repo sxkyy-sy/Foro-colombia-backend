@@ -382,8 +382,8 @@ function startServer(botClient) {
                 if (newReportedId) {
                     await sendNotification(
                         newReportedId,
-                        '🚨 Has sido reportado',
-                        `Has sido reportado en el foro por **${report.rule}**.\n\n**Tema:** ${report.title}\n\nEl reporte ha sido aceptado por el STAFF. Ingresa al panel para revisar tu caso y responder.`,
+                        '🚨 Haz sido reportado',
+                        `Haz sido reportado en el foro por **${report.rule}**.\n\n**Tema:** ${report.title}\n\nEl reporte ha sido aceptado por el STAFF. Ingresa al panel para revisar tu caso y responder.`,
                         '#FF0000'
                     );
                 }
