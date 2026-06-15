@@ -344,6 +344,7 @@ function startServer(botClient) {
                 }
             } catch (err) {
                 console.error("Error buscando usuario:", err);
+                return res.status(500).json({ error: 'Error del bot de Discord al buscar el usuario: ' + err.message });
             }
         }
         
