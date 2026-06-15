@@ -277,6 +277,20 @@ function startServer(botClient) {
 
         res.json({ success: true, id: result.lastID });
     });
+    app.delete('/api/reports/:id', async (req, res) => {
+        if (!req.user || req.user.is_admin !== 1) return res.status(403).json({ error: 'Denegado' });
+        const db = await getDB();
+        await db.run('DELETE FROM comments WHERE report_id = ?', [req.params.id]);
+        await db.run('DELETE FROM reports WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    });
+
+    app.delete('/api/comments/:id', async (req, res) => {
+        if (!req.user || req.user.is_admin !== 1) return res.status(403).json({ error: 'Denegado' });
+        const db = await getDB();
+        await db.run('DELETE FROM comments WHERE id = ?', [req.params.id]);
+        res.json({ success: true });
+    });
 
     app.post('/api/reports/:id/comments', async (req, res) => {
         if (!req.user) return res.status(401).json({ error: 'Inicia sesión primero' });
