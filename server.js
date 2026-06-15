@@ -264,7 +264,7 @@ function startServer(botClient) {
             [title, req.user.id, req.user.username, req.user.avatar, reportedId, rule, description, videoUrl, date, finalCategoryId]
         );
 
-        const reportUrl = `http://localhost:5173`;
+        const reportUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 
         // Enviar confirmación al autor
         await sendNotification(
