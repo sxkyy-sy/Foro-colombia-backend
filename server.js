@@ -191,7 +191,8 @@ function startServer(botClient) {
     app.post('/api/upload', upload.single('image'), (req, res) => {
         if (!req.user) return res.status(401).json({ error: 'No autorizado' });
         if (!req.file) return res.status(400).json({ error: 'No se subió ningún archivo' });
-        const url = `http://localhost:3000/uploads/${req.file.filename}`;
+        const baseUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+        const url = `${baseUrl}/uploads/${req.file.filename}`;
         res.json({ url });
     });
 
