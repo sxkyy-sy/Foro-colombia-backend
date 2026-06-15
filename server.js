@@ -257,22 +257,6 @@ function startServer(botClient) {
         
         const finalCategoryId = categoryId || 1; // Default a 1 (Reportes)
         let reportedId = null;
-        
-        if (finalCategoryId === 1 && reportedUsername && botClient) {
-            const cleanUsername = reportedUsername.replace('@', '').toLowerCase();
-            try {
-                const guild = await botClient.guilds.fetch(process.env.GUILD_ID);
-                const members = await guild.members.fetch({ query: cleanUsername, limit: 1 });
-                const member = members.first();
-                if (member) {
-                    reportedId = member.user.id;
-                } else {
-                    return res.status(400).json({ error: 'No se encontró a nadie en el Discord de Colombia Exotic con ese nombre.' });
-                }
-            } catch (err) {
-                console.error("Error buscando usuario:", err);
-            }
-        }
 
         const result = await db.run(
             `INSERT INTO reports (title, author_id, author_name, author_avatar, reported_id, rule, description, video_url, date, category_id) 
@@ -281,17 +265,6 @@ function startServer(botClient) {
         );
 
         const reportUrl = `http://localhost:5173`;
-
-        // Enviar DM al reportado
-        if (finalCategoryId === 1 && reportedId) {
-            await sendNotification(
-                reportedId,
-                '🚨 Has sido reportado',
-                `Alguien te ha reportado en el foro por **${rule}**.\n\n**Tema:** ${title}\n\nIngresa al panel para revisar tu caso y responder.`,
-                '#FF0000',
-                reportUrl
-            );
-        }
 
         // Enviar confirmación al autor
         await sendNotification(
@@ -340,13 +313,34 @@ function startServer(botClient) {
     app.put('/api/reports/:id/status', async (req, res) => {
         if (!req.user || req.user.is_admin !== 1) return res.status(401).json({ error: 'No autorizado' });
         
-        const { status, verdict } = req.body;
+        const { status, verdict, reportedUsername } = req.body;
         const db = await getDB();
         
-        await db.run('UPDATE reports SET status = ?, verdict = ?, closed_by = ? WHERE id = ?', [status, verdict || '', req.user.id, req.params.id]);
+        let newReportedId = null;
+        if (status === 'accepted' && reportedUsername && botClient) {
+            const cleanUsername = reportedUsername.replace('@', '').toLowerCase();
+            try {
+                const guild = await botClient.guilds.fetch(process.env.GUILD_ID);
+                const members = await guild.members.fetch({ query: cleanUsername, limit: 1 });
+                const member = members.first();
+                if (member) {
+                    newReportedId = member.user.id;
+                } else {
+                    return res.status(400).json({ error: 'No se encontró a nadie en el Discord de Colombia Exotic con ese nombre.' });
+                }
+            } catch (err) {
+                console.error("Error buscando usuario:", err);
+            }
+        }
+        
+        if (newReportedId) {
+            await db.run('UPDATE reports SET status = ?, verdict = ?, closed_by = ?, reported_id = ? WHERE id = ?', [status, verdict || '', req.user.id, newReportedId, req.params.id]);
+        } else {
+            await db.run('UPDATE reports SET status = ?, verdict = ?, closed_by = ? WHERE id = ?', [status, verdict || '', req.user.id, req.params.id]);
+        }
 
         // Notificar cambio de estado
-        const report = await db.get('SELECT title, author_id, reported_id FROM reports WHERE id = ?', [req.params.id]);
+        const report = await db.get('SELECT title, author_id, reported_id, rule FROM reports WHERE id = ?', [req.params.id]);
         if (report) {
             const cleanReportedId = report.reported_id ? report.reported_id.replace(/[^0-9]/g, '') : null;
             let title = '';
@@ -357,6 +351,16 @@ function startServer(botClient) {
                 title = '🔓 Reporte Aceptado';
                 desc = `El reporte **"${report.title}"** ha sido aceptado por la administración y está abierto a debate.`;
                 color = '#003580';
+                
+                // Si acabamos de encontrar y guardar al reportado, enviarle el DM inicial
+                if (newReportedId) {
+                    await sendNotification(
+                        newReportedId,
+                        '🚨 Has sido reportado',
+                        `Has sido reportado en el foro por **${report.rule}**.\n\n**Tema:** ${report.title}\n\nEl reporte ha sido aceptado por el STAFF. Ingresa al panel para revisar tu caso y responder.`,
+                        '#FF0000'
+                    );
+                }
             } else if (status === 'archived') {
                 title = '🔒 Tema Archivado';
                 desc = `El tema **"${report.title}"** ha sido cerrado y archivado.\n\n**Veredicto del STAFF:**\n${verdict}`;
@@ -365,7 +369,9 @@ function startServer(botClient) {
 
             if (title) {
                 await sendNotification(report.author_id, title, desc, color);
-                if (cleanReportedId) {
+                // Si el status es archivado (o aceptado y ya tenia reportedId de antes), le notificamos el cambio de estado normalmente
+                // Pero si es 'accepted' y lo acabamos de setear (newReportedId), ya le mandamos la alerta de arriba, evitamos doble ping
+                if (cleanReportedId && !newReportedId) {
                     await sendNotification(cleanReportedId, title, desc, color);
                 }
             }
