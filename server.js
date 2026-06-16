@@ -38,7 +38,6 @@ function startServer(botClient) {
         credentials: true
     }));
     
-    app.use(express.json());
 
     const pgSession = require('connect-pg-simple')(session);
     const { pool } = require('./db');
@@ -51,7 +50,7 @@ function startServer(botClient) {
         secret: process.env.SESSION_SECRET || 'secret',
         resave: false,
         saveUninitialized: false,
-        cookie: { secure: false, maxAge: 1000 * 60 * 60 * 24 * 30 } // 30 days expiration
+        cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 1000 * 60 * 60 * 24 * 30 } // 30 days expiration
     }));
 
     app.use(express.json());
@@ -257,8 +256,12 @@ function startServer(botClient) {
         const date = new Date().toLocaleDateString('es-ES');
         const db = await getDB();
         
-        const finalCategoryId = categoryId || 1; // Default a 1 (Reportes)
-        let reportedId = null;
+        const finalCategoryId = categoryId || 1;
+
+        // Bug fix: guardar el reportedUsername desde el formulario si existe
+        // Esto permite que la restricción de comentarios funcione desde el inicio
+        // El formato se guarda como "@usuario" y se limpia con regex cuando se necesita
+        const reportedId = reportedUsername ? reportedUsername.trim() : null;
 
         const result = await db.run(
             `INSERT INTO reports (title, author_id, author_name, author_avatar, reported_id, rule, description, video_url, date, category_id) 
@@ -311,9 +314,11 @@ function startServer(botClient) {
         const isReported = cleanReportedId && req.user.id === cleanReportedId;
         const isStaff = req.user.is_admin === 1;
 
-        // Solo aplica esta restricción en la categoría de reportes (id 1)
-        if (report.category_id === 1 && !isAuthor && !isReported && !isStaff) {
-            return res.status(403).json({ error: 'Solo las partes involucradas y el STAFF pueden responder en un reporte.' });
+        // Bug fix: aplica la restricción a TODAS las categorías tipo reporte (1, 2, 3)
+        // No solo a category_id === 1, así cubre Reportes de Jugadores, STAFF y Apelaciones
+        const REPORT_CATEGORIES = [1, 2, 3];
+        if (REPORT_CATEGORIES.includes(report.category_id) && !isAuthor && !isReported && !isStaff) {
+            return res.status(403).json({ error: 'Solo las partes involucradas y el STAFF pueden responder en este hilo.' });
         }
 
         await db.run(
